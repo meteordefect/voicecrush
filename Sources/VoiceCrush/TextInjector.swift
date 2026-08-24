@@ -15,6 +15,43 @@ enum TextInjector {
         var name: String {
             app.localizedName ?? app.bundleIdentifier ?? "app"
         }
+
+        var isTerminal: Bool {
+            TextInjector.isTerminal(app)
+        }
+
+        var prefersTypedInput: Bool {
+            TextInjector.prefersTypedInput(app)
+        }
+    }
+
+    private static let terminalBundleIds: Set<String> = [
+        "com.mitchellh.ghostty",
+        "com.apple.Terminal",
+        "com.googlecode.iterm2",
+        "org.alacritty",
+        "net.kovidgoyal.kitty",
+        "dev.warp.Warp-Stable",
+        "com.github.wez.wezterm"
+    ]
+
+    static func isTerminal(_ app: NSRunningApplication?) -> Bool {
+        guard let id = app?.bundleIdentifier?.lowercased() else { return false }
+        if terminalBundleIds.contains(where: { $0.lowercased() == id }) {
+            return true
+        }
+        return id.contains("ghostty") || id.contains("iterm") || id.contains("alacritty") || id.contains("kitty")
+    }
+
+    static func prefersTypedInput(_ app: NSRunningApplication?) -> Bool {
+        if isTerminal(app) { return true }
+        let id = app?.bundleIdentifier?.lowercased() ?? ""
+        let name = app?.localizedName?.lowercased() ?? ""
+        return name == "cursor"
+            || id.contains("cursor")
+            || id.contains("todesktop")
+            || id.contains("vscode")
+            || name.contains("windsurf")
     }
 
     static func captureTarget() -> Target? {
@@ -63,28 +100,36 @@ enum TextInjector {
         pasteboard.setString(trimmed, forType: .string)
 
         let target = target ?? captureTarget()
-        if let target, !target.app.isTerminated {
-            NSApp.yieldActivation(to: target.app)
-            target.app.activate()
-            try? await Task.sleep(for: .milliseconds(180))
-            if let element = target.element ?? focusedElement(ownedBy: target.app) {
-                AXUIElementSetAttributeValue(
-                    element,
-                    kAXFocusedAttribute as CFString,
-                    kCFBooleanTrue
-                )
-                try? await Task.sleep(for: .milliseconds(60))
-                if insertSelectedText(trimmed, into: element) {
-                    log("ax insert into \(target.name)")
-                    restorePasteboard(previous)
-                    return .pasted
-                }
+        await bringForwardIfNeeded(target)
+
+        let pid = target?.app.processIdentifier
+        let appName = target?.name
+
+        // Cursor, Ghostty, and other GPU/Electron apps often look selected,
+        // accept Automation, then never insert into the real text field.
+        if target?.prefersTypedInput == true {
+            typeUnicode(trimmed, to: pid)
+            log("typed into \(appName ?? "front") pid=\(pid ?? -1)")
+            try? await Task.sleep(for: .milliseconds(400))
+            restorePasteboard(previous)
+            return .pasted
+        }
+
+        if let target, let element = target.element ?? focusedElement(ownedBy: target.app) {
+            AXUIElementSetAttributeValue(
+                element,
+                kAXFocusedAttribute as CFString,
+                kCFBooleanTrue
+            )
+            try? await Task.sleep(for: .milliseconds(60))
+            if insertSelectedText(trimmed, into: element) {
+                log("ax insert into \(target.name)")
+                restorePasteboard(previous)
+                return .pasted
             }
         }
 
         try? await Task.sleep(for: .milliseconds(60))
-        let pid = target?.app.processIdentifier
-        let appName = target?.name
         if pasteWithSystemEvents(into: appName) {
             log("system events paste into \(appName ?? "front")")
         } else {
@@ -106,7 +151,20 @@ enum TextInjector {
     }
 
     @MainActor
+    private static func bringForwardIfNeeded(_ target: Target?) async {
+        guard let target, !target.app.isTerminated else { return }
+        if NSWorkspace.shared.frontmostApplication?.processIdentifier == target.app.processIdentifier {
+            return
+        }
+        NSApp.yieldActivation(to: target.app)
+        target.app.activate()
+        try? await Task.sleep(for: .milliseconds(target.prefersTypedInput ? 250 : 180))
+    }
+
+    @MainActor
     static func pressReturn(into target: Target?) async {
+        let target = target ?? captureTarget()
+        await bringForwardIfNeeded(target)
         let pid = target?.app.processIdentifier
         let key: CGKeyCode = 36
         guard let source = CGEventSource(stateID: .hidSystemState) else { return }
@@ -118,9 +176,11 @@ enum TextInjector {
             if let pid, pid > 0 { up.postToPid(pid) }
             up.post(tap: .cghidEventTap)
         }
-        let script = "tell application \"System Events\" to key code 36"
-        var error: NSDictionary?
-        NSAppleScript(source: script)?.executeAndReturnError(&error)
+        if target?.prefersTypedInput != true {
+            var error: NSDictionary?
+            NSAppleScript(source: "tell application \"System Events\" to key code 36")?
+                .executeAndReturnError(&error)
+        }
     }
 
     private static func insertSelectedText(_ text: String, into element: AXUIElement) -> Bool {
