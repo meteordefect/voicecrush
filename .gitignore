@@ -4,3 +4,12 @@ dist/
 *.swp
 .swiftpm/
 .crush/
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.key
+*.mobileprovision
+credentials.json
+secrets/
