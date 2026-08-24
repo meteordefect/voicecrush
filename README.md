@@ -1,3 +1,13 @@
+```
+ ██╗   ██╗ ██████╗ ██╗ ██████╗███████╗ ██████╗██████╗ ██╗   ██╗███████╗██╗  ██╗
+ ██║   ██║██╔═══██╗██║██╔════╝██╔════╝██╔════╝██╔══██╗██║   ██║██╔════╝██║  ██║
+ ██║   ██║██║   ██║██║██║     █████╗  ██║     ██████╔╝██║   ██║███████╗███████║
+ ╚██╗ ██╔╝██║   ██║██║██║     ██╔══╝  ██║     ██╔══██╗██║   ██║╚════██║██╔══██║
+  ╚████╔╝ ╚██████╔╝██║╚██████╗███████╗╚██████╗██║  ██║╚██████╔╝███████║██║  ██║
+   ╚═══╝   ╚═════╝ ╚═╝ ╚═════╝╚══════╝ ╚═════╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═╝
+                    ▁▂▃▅▇█  on-device voice  █▇▅▃▂▁
+```
+
 # VoiceCrush
 
 A native macOS overlay for push-to-talk dictation, by **Keith Vaughan** of [Cipher Projects](https://keithassociates.com). Speak, then send the text into whatever app is focused — Cursor, Terminal, Notes, anywhere you can type.
