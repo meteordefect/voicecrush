@@ -52,8 +52,8 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     private func setupStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = "VP"
-        item.button?.toolTip = "VoicePilot"
+        item.button?.title = "VC"
+        item.button?.toolTip = "VoiceCrush"
 
         let menu = NSMenu()
         menu.addItem(withTitle: "Hold Right Option to talk", action: nil, keyEquivalent: "")
@@ -63,7 +63,7 @@ final class AppController: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Open Accessibility settings…", action: #selector(requestAccessibility), keyEquivalent: "")
         menu.addItem(withTitle: "Open Input Monitoring settings…", action: #selector(requestInputMonitoring), keyEquivalent: "")
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(withTitle: "Quit VoicePilot", action: #selector(quit), keyEquivalent: "q")
+        menu.addItem(withTitle: "Quit VoiceCrush", action: #selector(quit), keyEquivalent: "q")
         item.menu = menu
         statusItem = item
     }
@@ -79,7 +79,7 @@ final class AppController: NSObject, NSApplicationDelegate {
 
     @objc private func userAppActivated(_ notification: Notification) {
         guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
-              app.bundleIdentifier != "com.voicepilot.app"
+              app.bundleIdentifier != "com.voicecrush.app"
         else { return }
         target = TextInjector.Target(
             app: app,

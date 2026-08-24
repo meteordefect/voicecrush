@@ -5,15 +5,15 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>VoicePilot</string>
+	<string>VoiceCrush</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.voicepilot.app</string>
+	<string>com.voicecrush.app</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>VoicePilot</string>
+	<string>VoiceCrush</string>
 	<key>CFBundleDisplayName</key>
-	<string>VoicePilot</string>
+	<string>VoiceCrush</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleIconName</key>
@@ -21,9 +21,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.5</string>
+	<string>0.1.6</string>
 	<key>CFBundleVersion</key>
-	<string>6</string>
+	<string>7</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
 	<key>LSApplicationCategoryType</key>
@@ -31,10 +31,10 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>VoicePilot records your microphone so it can turn speech into text in the app you are using.</string>
+	<string>VoiceCrush records your microphone so it can turn speech into text in the app you are using.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>VoicePilot transcribes your speech on this Mac and pastes the text into the focused app.</string>
+	<string>VoiceCrush transcribes your speech on this Mac and pastes the text into the focused app.</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>VoicePilot pastes transcribed text into the app you are using.</string>
+	<string>VoiceCrush pastes transcribed text into the app you are using.</string>
 </dict>
 </plist>

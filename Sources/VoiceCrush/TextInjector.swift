@@ -24,11 +24,11 @@ enum TextInjector {
 
     static func lastUserApp() -> NSRunningApplication? {
         if let front = NSWorkspace.shared.frontmostApplication,
-           front.bundleIdentifier != "com.voicepilot.app" {
+              front.bundleIdentifier != "com.voicecrush.app" {
             return front
         }
         return NSWorkspace.shared.runningApplications.first {
-            $0.isActive && $0.bundleIdentifier != "com.voicepilot.app" && $0.activationPolicy == .regular
+            $0.isActive && $0.bundleIdentifier != "com.voicecrush.app" && $0.activationPolicy == .regular
         }
     }
 
@@ -223,7 +223,7 @@ enum TextInjector {
 
     private static func log(_ message: String) {
         let line = "\(ISO8601DateFormatter().string(from: Date())) \(message)\n"
-        let url = URL(fileURLWithPath: "/tmp/voicepilot-paste.log")
+        let url = URL(fileURLWithPath: "/tmp/voicecrush-paste.log")
         if let data = line.data(using: .utf8) {
             if FileManager.default.fileExists(atPath: url.path) {
                 if let handle = try? FileHandle(forWritingTo: url) {

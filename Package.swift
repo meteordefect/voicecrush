@@ -3,20 +3,20 @@
 import PackageDescription
 
 let package = Package(
-    name: "VoicePilot",
+    name: "VoiceCrush",
     platforms: [
         .macOS(.v26)
     ],
     products: [
-        .executable(name: "VoicePilot", targets: ["VoicePilot"])
+        .executable(name: "VoiceCrush", targets: ["VoiceCrush"])
     ],
     targets: [
         .executableTarget(
-            name: "VoicePilot",
-            path: "Sources/VoicePilot",
+            name: "VoiceCrush",
+            path: "Sources/VoiceCrush",
             exclude: [
                 "Info.plist",
-                "VoicePilot.entitlements"
+                "VoiceCrush.entitlements"
             ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
