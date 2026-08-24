@@ -1,6 +1,6 @@
 # VoicePilot
 
-A native macOS overlay for push-to-talk dictation. Speak, then send the text into whatever app is focused — Cursor, Terminal, Notes, anywhere you can type.
+A native macOS overlay for push-to-talk dictation, by **Keith Vaughan**. Speak, then send the text into whatever app is focused — Cursor, Terminal, Notes, anywhere you can type.
 
 Speech stays on the Mac. VoicePilot uses Apple’s on-device SpeechAnalyzer. No cloud model, no Electron.
 
@@ -42,6 +42,10 @@ macOS will not let one app type into another without these. Grant them for `/App
 
 After you rebuild and replace the app, macOS may treat it as a new binary. Remove the old VoicePilot entries and add the new `/Applications/VoicePilot.app` again.
 
+## Author
+
+Keith Vaughan
+
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Copyright © 2026 Keith Vaughan.
