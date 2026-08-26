@@ -166,19 +166,7 @@ final class AppController: NSObject, NSApplicationDelegate {
             self.lastTranscript = text
             self.overlay.setState(.working)
             self.overlay.setPreview("Pasting into \(self.target?.name ?? "front app")")
-            switch await TextInjector.paste(text, into: self.target) {
-            case .pasted:
-                self.overlay.setPreview("")
-                self.overlay.setState(.idle)
-            case .needsAccessibility:
-                self.overlay.setPreview("")
-                self.overlay.setState(.failed("Enable Accessibility"))
-                self.resetIdleSoon()
-            case .failed:
-                self.overlay.setPreview("")
-                self.overlay.setState(.failed("Paste failed"))
-                self.resetIdleSoon()
-            }
+            self.applyPasteResult(await TextInjector.paste(text, into: self.target))
         }
     }
 
@@ -201,10 +189,28 @@ final class AppController: NSObject, NSApplicationDelegate {
             }
             self.overlay.setState(.working)
             self.overlay.setPreview("Enter → \(self.target?.name ?? "front app")")
-            _ = await TextInjector.paste(text, into: self.target, waitForModifiers: false)
-            await TextInjector.pressReturn(into: self.target)
-            self.overlay.setPreview("")
-            self.overlay.setState(.idle)
+            let result = await TextInjector.paste(text, into: self.target, waitForModifiers: false)
+            if result == .pasted {
+                await TextInjector.pressReturn(into: self.target)
+            }
+            self.applyPasteResult(result)
+        }
+    }
+
+    private func applyPasteResult(_ result: TextInjector.Result) {
+        overlay.setPreview("")
+        switch result {
+        case .pasted:
+            overlay.setState(.idle)
+        case .needsAccessibility:
+            overlay.setState(.failed("Enable Accessibility"))
+            resetIdleSoon()
+        case .needsInputMonitoring:
+            overlay.setState(.failed("Enable Input Monitoring"))
+            resetIdleSoon()
+        case .failed:
+            overlay.setState(.failed("Paste failed"))
+            resetIdleSoon()
         }
     }
 

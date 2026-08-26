@@ -2,9 +2,10 @@ import AppKit
 import ApplicationServices
 
 enum TextInjector {
-    enum Result {
+    enum Result: Equatable {
         case pasted
         case needsAccessibility
+        case needsInputMonitoring
         case failed
     }
 
@@ -22,6 +23,10 @@ enum TextInjector {
 
         var prefersTypedInput: Bool {
             TextInjector.prefersTypedInput(app)
+        }
+
+        var isBrowser: Bool {
+            TextInjector.isBrowser(app)
         }
     }
 
@@ -52,6 +57,22 @@ enum TextInjector {
             || id.contains("todesktop")
             || id.contains("vscode")
             || name.contains("windsurf")
+    }
+
+    static func isBrowser(_ app: NSRunningApplication?) -> Bool {
+        let id = app?.bundleIdentifier?.lowercased() ?? ""
+        let name = app?.localizedName?.lowercased() ?? ""
+        return id.contains("safari")
+            || id.contains("chrome")
+            || id.contains("brave")
+            || id.contains("firefox")
+            || id.contains("orion")
+            || id.contains("edge")
+            || id.contains("arc")
+            || id.contains("comet")
+            || name.contains("brave")
+            || name.contains("safari")
+            || name.contains("chrome")
     }
 
     static func captureTarget() -> Target? {
@@ -91,7 +112,7 @@ enum TextInjector {
         guard !trimmed.isEmpty else { return .failed }
 
         if waitForModifiers {
-            try? await Task.sleep(for: .milliseconds(280))
+            await waitUntilModifiersClear()
         }
 
         let pasteboard = NSPasteboard.general
@@ -101,27 +122,21 @@ enum TextInjector {
 
         let target = target ?? captureTarget()
         await bringForwardIfNeeded(target)
+        await waitUntilModifiersClear()
 
-        let pid = target?.app.processIdentifier
-        let appName = target?.name
+        let appName = target?.name ?? "front"
+        log("paste start ax=\(Permissions.hasAccessibility) post=\(Permissions.canPostEvents) target=\(appName)")
 
-        // Cursor, Ghostty, and other GPU/Electron apps often look selected,
-        // accept Automation, then never insert into the real text field.
-        if target?.prefersTypedInput == true {
-            typeUnicode(trimmed, to: pid)
-            log("typed into \(appName ?? "front") pid=\(pid ?? -1)")
-            try? await Task.sleep(for: .milliseconds(400))
-            restorePasteboard(previous)
-            return .pasted
-        }
-
-        if let target, let element = target.element ?? focusedElement(ownedBy: target.app) {
+        // Native text views only. Browsers and GPU/Electron apps report AX success
+        // without inserting into the real field.
+        if target?.isBrowser != true, target?.prefersTypedInput != true,
+           let target, let element = target.element ?? focusedElement(ownedBy: target.app) {
             AXUIElementSetAttributeValue(
                 element,
                 kAXFocusedAttribute as CFString,
                 kCFBooleanTrue
             )
-            try? await Task.sleep(for: .milliseconds(60))
+            try? await Task.sleep(for: .milliseconds(40))
             if insertSelectedText(trimmed, into: element) {
                 log("ax insert into \(target.name)")
                 restorePasteboard(previous)
@@ -129,18 +144,47 @@ enum TextInjector {
             }
         }
 
-        try? await Task.sleep(for: .milliseconds(60))
-        if pasteWithSystemEvents(into: appName) {
-            log("system events paste into \(appName ?? "front")")
-        } else {
-            postCommandV(to: pid)
-            typeUnicode(trimmed, to: pid)
-            log("fallback type into \(appName ?? "front") pid=\(pid ?? -1)")
+        if postCommandV() {
+            log("hid cmd-v into \(appName)")
+            try? await Task.sleep(for: .milliseconds(600))
+            restorePasteboard(previous)
+            return .pasted
         }
 
-        try? await Task.sleep(for: .milliseconds(1500))
+        switch pasteWithSystemEvents(into: appName) {
+        case .success:
+            log("system events paste into \(appName)")
+            try? await Task.sleep(for: .milliseconds(500))
+            restorePasteboard(previous)
+            return .pasted
+        case .denied:
+            log("system events denied for \(appName)")
+            restorePasteboard(previous)
+            return permissionFailure()
+        case .failed:
+            break
+        }
+
+        if target?.prefersTypedInput == true {
+            typeUnicode(trimmed)
+            log("typed into \(appName)")
+            try? await Task.sleep(for: .milliseconds(400))
+            restorePasteboard(previous)
+            return .pasted
+        }
+
         restorePasteboard(previous)
-        return .pasted
+        return permissionFailure()
+    }
+
+    private static func permissionFailure() -> Result {
+        if !Permissions.hasAccessibility {
+            return .needsAccessibility
+        }
+        if !Permissions.canPostEvents {
+            return .needsInputMonitoring
+        }
+        return .failed
     }
 
     private static func restorePasteboard(_ previous: String?) {
@@ -151,6 +195,17 @@ enum TextInjector {
     }
 
     @MainActor
+    private static func waitUntilModifiersClear() async {
+        for _ in 0..<40 {
+            let flags = CGEventSource.flagsState(.combinedSessionState)
+            if flags.intersection([.maskCommand, .maskAlternate, .maskControl, .maskShift]).isEmpty {
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
+    @MainActor
     private static func bringForwardIfNeeded(_ target: Target?) async {
         guard let target, !target.app.isTerminated else { return }
         if NSWorkspace.shared.frontmostApplication?.processIdentifier == target.app.processIdentifier {
@@ -158,28 +213,21 @@ enum TextInjector {
         }
         NSApp.yieldActivation(to: target.app)
         target.app.activate()
-        try? await Task.sleep(for: .milliseconds(target.prefersTypedInput ? 250 : 180))
+        try? await Task.sleep(for: .milliseconds(target.isBrowser || target.prefersTypedInput ? 250 : 180))
     }
 
     @MainActor
     static func pressReturn(into target: Target?) async {
         let target = target ?? captureTarget()
         await bringForwardIfNeeded(target)
-        let pid = target?.app.processIdentifier
-        let key: CGKeyCode = 36
+        await waitUntilModifiersClear()
         guard let source = CGEventSource(stateID: .hidSystemState) else { return }
+        let key: CGKeyCode = 36
         if let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true) {
-            if let pid, pid > 0 { down.postToPid(pid) }
             down.post(tap: .cghidEventTap)
         }
         if let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false) {
-            if let pid, pid > 0 { up.postToPid(pid) }
             up.post(tap: .cghidEventTap)
-        }
-        if target?.prefersTypedInput != true {
-            var error: NSDictionary?
-            NSAppleScript(source: "tell application \"System Events\" to key code 36")?
-                .executeAndReturnError(&error)
         }
     }
 
@@ -195,68 +243,54 @@ enum TextInjector {
         return error == .success
     }
 
-    private static func pasteWithSystemEvents(into appName: String?) -> Bool {
-        let quoted = (appName ?? "").replacingOccurrences(of: "\"", with: "")
-        let source: String
-        if quoted.isEmpty {
-            source = "tell application \"System Events\" to keystroke \"v\" using command down"
-        } else {
-            source = """
-            tell application "\(quoted)" to activate
-            delay 0.12
-            tell application "System Events"
-              tell process "\(quoted)"
-                set frontmost to true
-                keystroke "v" using command down
-              end tell
-            end tell
-            """
-        }
+    private enum ScriptResult {
+        case success
+        case denied
+        case failed
+    }
+
+    private static func pasteWithSystemEvents(into appName: String) -> ScriptResult {
+        let quoted = appName.replacingOccurrences(of: "\"", with: "")
+        let source = """
+        tell application "\(quoted)" to activate
+        delay 0.08
+        tell application "System Events" to keystroke "v" using command down
+        """
         var error: NSDictionary?
-        guard let script = NSAppleScript(source: source) else { return false }
+        guard let script = NSAppleScript(source: source) else { return .failed }
         _ = script.executeAndReturnError(&error)
         if let error {
             log("applescript error \(error)")
+            let number = error["NSAppleScriptErrorNumber"] as? Int
+            if number == 1002 || number == -1743 {
+                return .denied
+            }
+            return .failed
+        }
+        return .success
+    }
+
+    private static func postCommandV() -> Bool {
+        guard Permissions.canPostEvents else { return false }
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return false }
+        source.setLocalEventsFilterDuringSuppressionState(
+            [.permitLocalKeyboardEvents, .permitLocalMouseEvents],
+            state: .eventSuppressionStateSuppressionInterval
+        )
+        let keyV: CGKeyCode = 9
+        guard let down = CGEvent(keyboardEventSource: source, virtualKey: keyV, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: keyV, keyDown: false) else {
             return false
         }
+        down.flags = .maskCommand
+        up.flags = .maskCommand
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
         return true
     }
 
-    private static func postCommandV(to pid: pid_t?) {
-        let sources: [CGEventSourceStateID] = [.hidSystemState, .combinedSessionState]
-        let taps: [CGEventTapLocation] = [.cghidEventTap, .cgSessionEventTap]
-        let command: CGKeyCode = 55
-        let keyV: CGKeyCode = 9
-        let commandFlag = CGEventFlags([.maskCommand, CGEventFlags(rawValue: 0x000008)])
-        let keys: [(CGKeyCode, Bool, CGEventFlags)] = [
-            (command, true, .maskCommand),
-            (keyV, true, commandFlag),
-            (keyV, false, commandFlag),
-            (command, false, [])
-        ]
-
-        for state in sources {
-            guard let source = CGEventSource(stateID: state) else { continue }
-            source.setLocalEventsFilterDuringSuppressionState(
-                [.permitLocalKeyboardEvents, .permitLocalMouseEvents],
-                state: .eventSuppressionStateSuppressionInterval
-            )
-            for (key, down, flags) in keys {
-                guard let event = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: down) else {
-                    continue
-                }
-                event.flags = flags
-                if let pid, pid > 0 {
-                    event.postToPid(pid)
-                }
-                for tap in taps {
-                    event.post(tap: tap)
-                }
-            }
-        }
-    }
-
-    private static func typeUnicode(_ text: String, to pid: pid_t?) {
+    private static func typeUnicode(_ text: String) {
+        guard Permissions.canPostEvents else { return }
         guard let source = CGEventSource(stateID: .hidSystemState) else { return }
         let scalars = Array(text.utf16)
         var index = 0
@@ -265,16 +299,10 @@ enum TextInjector {
             var slice = Array(scalars[index..<end])
             if let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true) {
                 down.keyboardSetUnicodeString(stringLength: slice.count, unicodeString: &slice)
-                if let pid, pid > 0 {
-                    down.postToPid(pid)
-                }
                 down.post(tap: .cghidEventTap)
             }
             if let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) {
                 up.keyboardSetUnicodeString(stringLength: slice.count, unicodeString: &slice)
-                if let pid, pid > 0 {
-                    up.postToPid(pid)
-                }
                 up.post(tap: .cghidEventTap)
             }
             index = end

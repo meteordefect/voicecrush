@@ -12,6 +12,11 @@ enum Permissions {
                 continuation.resume()
             }
         }
+        if !hasAccessibility,
+           UserDefaults.standard.bool(forKey: "didAskAccessibility") == false {
+            UserDefaults.standard.set(true, forKey: "didAskAccessibility")
+            promptAccessibility()
+        }
         if !CGPreflightPostEventAccess(),
            UserDefaults.standard.bool(forKey: "didAskInputMonitoring") == false {
             UserDefaults.standard.set(true, forKey: "didAskInputMonitoring")
@@ -19,7 +24,13 @@ enum Permissions {
         }
     }
 
+    static func promptAccessibility() {
+        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
+    }
+
     static func openAccessibilitySettings() {
+        promptAccessibility()
         openPrivacyPane("Privacy_Accessibility")
     }
 
